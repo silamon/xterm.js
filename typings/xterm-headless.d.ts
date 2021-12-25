@@ -916,6 +916,16 @@ declare module 'xterm-headless' {
     readonly viewportY: number;
 
     /**
+     * The first row of the scroll region.
+     */
+    readonly scrollregionTop: number;
+
+    /**
+     * The last row of the scroll region.
+     */
+    readonly scrollregionBottom: number;
+
+    /**
      * The line within the buffer where the top of the bottom page is (when
      * fully scrolled down).
      */

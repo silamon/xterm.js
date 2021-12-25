@@ -386,6 +386,13 @@ class StringSerializeHandler extends BaseSerializeHandler {
       moveRight(realCursorCol - this._lastCursorCol);
     }
 
+    // restore scrollregion
+    const scrollregionTop = this._buffer.scrollregionTop;
+    const scrollregionBottom = this._buffer.scrollregionBottom;
+    if (scrollregionTop !== 0 && scrollregionBottom !== this._terminal.rows - 1) {
+      content += `\u001b[${scrollregionTop};${scrollregionBottom}r`;
+    }
+
     return content;
   }
 }

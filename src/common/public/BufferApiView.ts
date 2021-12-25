@@ -22,6 +22,8 @@ export class BufferApiView implements IBufferApi {
   public get cursorY(): number { return this._buffer.y; }
   public get cursorX(): number { return this._buffer.x; }
   public get viewportY(): number { return this._buffer.ydisp; }
+  public get scrollregionTop(): number { return this._buffer.scrollTop; }
+  public get scrollregionBottom(): number { return this._buffer.scrollBottom; }
   public get baseY(): number { return this._buffer.ybase; }
   public get length(): number { return this._buffer.lines.length; }
   public getLine(y: number): IBufferLineApi | undefined {

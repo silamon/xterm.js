@@ -497,6 +497,26 @@ describe('SerializeAddon', () => {
     await testNormalScreenEqual(page, lines.join(''));
   });
 
+  it('serialize with scroll region', async () => {
+    const scrollregion = '\u001b[1;2r';
+
+    const lines = [
+      `1`,
+      `1${scrollregion}`,
+      `1`
+    ];
+    const expected = [
+      `1`,
+      `1`,
+      `1${scrollregion}`
+    ];
+
+    await writeSync(page, lines.join('\\r\\n'));
+    assert.equal(await page.evaluate(`window.term.buffer.scrollregionTop`), 0);
+    assert.equal(await page.evaluate(`window.term.buffer.scrollregionBottom`), 1);
+    assert.equal(JSON.stringify(await page.evaluate(`serializeAddon.serialize();`)), JSON.stringify(expected.join('\r\n')));
+  });
+
   describe('handle modes', () => {
     it('applicationCursorKeysMode', async () => {
       await testSerializeEquals('test\u001b[?1h', 'test\u001b[?1h');
