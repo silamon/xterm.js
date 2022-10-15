@@ -2,12 +2,12 @@
  * Copyright (c) 2019 The xterm.js authors. All rights reserved.
  * @license MIT
  *
- * (EXPERIMENTAL) This Addon is still under development
  */
 
 import { Terminal, ITerminalAddon, IBuffer, IBufferCell, IBufferRange } from 'xterm';
 import { IColorSet } from 'browser/Types';
 import { IAttributeData } from 'common/Types';
+import { UnderlineStyle } from 'common/buffer/Constants';
 
 function constrain(value: number, low: number, high: number): number {
   return Math.max(low, Math.min(value, high));
@@ -77,6 +77,7 @@ function equalFlags(cell1: IBufferCell | IAttributeData, cell2: IBufferCell): bo
   return cell1.isInverse() === cell2.isInverse()
     && cell1.isBold() === cell2.isBold()
     && cell1.isUnderline() === cell2.isUnderline()
+    && (cell1 as any).getUnderlineStyle() === (cell2 as any).getUnderlineStyle()
     && cell1.isBlink() === cell2.isBlink()
     && cell1.isInvisible() === cell2.isInvisible()
     && cell1.isItalic() === cell2.isItalic()
@@ -263,7 +264,10 @@ class StringSerializeHandler extends BaseSerializeHandler {
         if (flagsChanged) {
           if (cell.isInverse() !== oldCell.isInverse()) { sgrSeq.push(cell.isInverse() ? 7 : 27); }
           if (cell.isBold() !== oldCell.isBold()) { sgrSeq.push(cell.isBold() ? 1 : 22); }
-          if (cell.isUnderline() !== oldCell.isUnderline()) { sgrSeq.push(cell.isUnderline() ? 4 : 24); }
+          if (cell.isUnderline() !== oldCell.isUnderline()) {
+            sgrSeq.push(cell.isUnderline() ? 4 : 24);
+            if (cell.isUnderline()) { sgrSeq.push((cell as any).getUnderlineStyle()); }
+          }
           if (cell.isBlink() !== oldCell.isBlink()) { sgrSeq.push(cell.isBlink() ? 5 : 25); }
           if (cell.isInvisible() !== oldCell.isInvisible()) { sgrSeq.push(cell.isInvisible() ? 8 : 28); }
           if (cell.isItalic() !== oldCell.isItalic()) { sgrSeq.push(cell.isItalic() ? 3 : 23); }
@@ -310,7 +314,7 @@ class StringSerializeHandler extends BaseSerializeHandler {
       this._lastContentCursorRow = this._lastCursorRow = row;
       this._lastContentCursorCol = this._lastCursorCol = col;
 
-      this._currentRow += `\u001b[${sgrSeq.join(';')}m`;
+      this._currentRow += `\u001b[${sgrSeq.join(';').replace(/4;([0-5])/, '4:$1')}m`;
 
       // update the last cursor style
       const line = this._buffer.getLine(row);
@@ -589,23 +593,22 @@ export class HTMLSerializeHandler extends BaseSerializeHandler {
     this._currentRow = '';
   }
 
-  private _getHexColor(cell: IBufferCell, isFg: boolean): string | undefined {
-    const color = isFg ? cell.getFgColor() : cell.getBgColor();
-    if (isFg ? cell.isFgRGB() : cell.isBgRGB()) {
+  private _getHexColor(cell: IBufferCell | IAttributeData, color: number, isRGB: boolean, isPalette: boolean): string | undefined {
+    if (isRGB) {
       const rgb = [
         (color >> 16) & 255,
-        (color >>  8) & 255,
-        (color      ) & 255
+        (color >> 8) & 255,
+        (color) & 255
       ];
       return rgb.map(x => this._padStart(x.toString(16), 2, '0')).join('');
     }
-    if (isFg ? cell.isFgPalette() : cell.isBgPalette()) {
+    if (isPalette) {
       return this._colors.ansi[color].css;
     }
     return undefined;
   }
 
-  private _diffStyle(cell: IBufferCell, oldCell: IBufferCell): string[] | undefined {
+  private _diffStyle(cell: IBufferCell | IAttributeData, oldCell: IBufferCell): string[] | undefined {
     const content: string[] = [];
 
     const fgChanged = !equalFg(cell, oldCell);
@@ -613,19 +616,41 @@ export class HTMLSerializeHandler extends BaseSerializeHandler {
     const flagsChanged = !equalFlags(cell, oldCell);
 
     if (fgChanged || bgChanged || flagsChanged) {
-      const fgHexColor = this._getHexColor(cell, true);
+      const fgHexColor = this._getHexColor(cell, cell.getFgColor(), cell.isFgRGB(), cell.isFgPalette());
       if (fgHexColor) {
         content.push('color: ' + fgHexColor + ';');
       }
 
-      const bgHexColor = this._getHexColor(cell, false);
+      const bgHexColor = this._getHexColor(cell, cell.getBgColor(), cell.isBgRGB(), cell.isBgPalette());
       if (bgHexColor) {
         content.push('background-color: ' + bgHexColor + ';');
       }
 
       if (cell.isInverse()) { content.push('color: #000000; background-color: #BFBFBF;'); }
       if (cell.isBold()) { content.push('font-weight: bold;'); }
-      if (cell.isUnderline()) { content.push('text-decoration: underline;'); }
+      if (cell.isUnderline()) {
+        switch ((cell as any).getUnderlineStyle()) {
+          case UnderlineStyle.SINGLE:
+            content.push('text-decoration: underline;');
+            break;
+          case UnderlineStyle.DOUBLE:
+            content.push('text-decoration: double underline;');
+            break;
+          case UnderlineStyle.CURLY:
+            content.push('text-decoration: wavy underline;');
+            break;
+          case UnderlineStyle.DOTTED:
+            content.push('text-decoration: dotted underline;');
+            break;
+          case UnderlineStyle.DASHED:
+            content.push('text-decoration: dashed underline;');
+            break;
+        }
+        const underlineHexColor = this._getHexColor(cell, (cell as any).getUnderlineColor(), (cell as any).isUnderlineColorRGB(), (cell as any).isUnderlineColorPalette());
+        if (underlineHexColor) {
+          content.push('text-decoration-color: ' + underlineHexColor + ';');
+        }
+      }
       if (cell.isBlink()) { content.push('text-decoration: blink;'); }
       if (cell.isInvisible()) { content.push('visibility: hidden;'); }
       if (cell.isItalic()) { content.push('font-style: italic;'); }
